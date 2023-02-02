@@ -1,0 +1,1240 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fieldReference", "filteredRelationCount", "fullTextSearch", "fullTextIndex", "extendedWhereUnique", "clientExtensions", "orderByNulls"]
+  binaryTargets   = ["native", "linux-musl", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+generator zod {
+  provider      = "zod-prisma"
+  output        = "./zod"
+  relationModel = true
+  modelCase     = "camelCase"
+  modelSuffix   = "Model"
+}
+
+enum AccountType {
+  ADMIN @map("admin")
+  USER  @map("user")
+  TUTOR @map("tutor")
+}
+
+enum Gender {
+  MALE    @map("male")
+  FEMALE  @map("female")
+  OTHER   @map("other")
+  UNKNOWN @map("unknown")
+}
+
+enum VerificationStatus {
+  PENDING  @map("pending")
+  VERIFIED @map("verified")
+  REJECTED @map("rejected")
+  UNKNOWN  @map("unknown")
+}
+
+model User {
+  id               Int                 @id @default(autoincrement())
+  firstName        String?
+  lastName         String?
+  middleName       String?
+  pronouns         String?
+  isParent         Boolean             @default(false)
+  gender           Gender              @default(UNKNOWN)
+  type             AccountType         @default(USER)
+  email            String              @unique
+  password         String?
+  birthDate        DateTime?
+  description      String?             @db.Text()
+  activated        Boolean             @default(false)
+  status           VerificationStatus? @default(UNKNOWN)
+  deleted          Boolean             @default(false)
+  signupFinished   Boolean             @default(false)
+  graduationDate   DateTime?
+  school           String?
+  grade            Int?
+  major            String?
+  createdAt        DateTime            @default(now())
+  verifiedAt       DateTime?
+  metadata         Json?
+  locale           String?
+  timezone         String?
+  calendarId       String?
+  timeFormat       Int                 @default(12)
+  notifications    Notification[]
+  phone            Phone?
+  messages         Message[]
+  attachments      Attachment[]
+  bookings         Booking[]
+  classes          Class[]
+  price            Price?
+  transactions     Transaction[]
+  customer         Customer?
+  payments         Payment[]
+  payouts          Payout[]
+  address          Address?
+  memberOf         Member[]
+  slots            Slots[]
+  oauth            OAuth[]
+  banks            Bank[]
+  balance          Balance?
+  lastActive       DateTime?
+  referralCode     String?             @unique
+  referral         Referral?
+  referrals        Referral[]          @relation("AllReferrals")
+  grades           TutorGrade[]
+  photo            Photo?
+  video            Video?
+  hasFreeTrial     Boolean             @default(false)
+  assignments      Assignment[]
+  tutorAssignments AssignmentTutor[]
+  applications     ApplyToTeach[]
+  userQuestions    UserQuestion[]
+  sessions         Session[]
+  Choice           Choice[]
+  waitlist         Waitlist[]
+  attendance       Attendance[]
+  quizResult       QuizResult[]
+
+  @@index([id])
+  @@index([email])
+  @@index([status])
+  @@index([type])
+  @@index([activated])
+  @@index([referralCode])
+  @@map("users")
+}
+
+model UserQuestion {
+  id       Int    @id @default(autoincrement())
+  question String
+  answer   String
+  userId   Int
+  user     User   @relation(fields: [userId], references: [id])
+
+  @@unique([userId, question])
+  @@index([userId])
+  @@map("user_questions")
+}
+
+model Referral {
+  id        Int       @id @default(autoincrement())
+  sourceId  String    @unique @default(cuid())
+  code      String
+  userId    Int       @unique
+  user      User      @relation(fields: [userId], references: [id])
+  used      Boolean   @default(false)
+  bonus     Int       @default(0)
+  referrer  User      @relation("AllReferrals", fields: [code], references: [referralCode], onDelete: Cascade)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([code])
+  @@map("referrals")
+}
+
+model Photo {
+  id        Int      @id @default(autoincrement())
+  photoId   String
+  userId    Int?     @unique
+  user      User?    @relation(fields: [userId], references: [id])
+  url       String   @db.VarChar(255)
+  alignment String?  @default("center")
+  createdAt DateTime @default(now())
+
+  @@index([photoId])
+  @@index([userId])
+  @@map("photos")
+}
+
+model Video {
+  id        Int      @id @default(autoincrement())
+  videoId   String
+  userId    Int?     @unique
+  user      User?    @relation(fields: [userId], references: [id])
+  url       String   @db.VarChar(255)
+  alignment String?  @default("center")
+  createdAt DateTime @default(now())
+
+  @@index([videoId])
+  @@index([userId])
+  @@map("videos")
+}
+
+model Balance {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique
+  availableAmount Int      @default(0)
+  upcomingAmount  Int      @default(0)
+  pendingAmount   Int      @default(0)
+  totalAmount     Int      @default(0)
+  updatedAt       DateTime @default(now()) @updatedAt
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("balances")
+}
+
+model Price {
+  id        Int      @id @default(autoincrement())
+  amount    Int
+  currency  String   @default("usd")
+  userId    Int      @unique
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([userId])
+  @@map("prices")
+}
+
+model Feedback {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  rating    Int
+  bookingId Int      @unique
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@index([bookingId])
+  @@map("feedback")
+}
+
+enum BookingStatus {
+  cancelled
+  accepted
+  rejected
+  pending
+}
+
+model Booking {
+  id          Int           @id @default(autoincrement())
+  sourceId    String        @unique @default(cuid())
+  userId      Int
+  user        User          @relation(fields: [userId], references: [id])
+  status      BookingStatus
+  classId     Int?
+  class       Class?        @relation(fields: [classId], references: [id])
+  feedback    Feedback?
+  cancelledAt DateTime?
+  trial       Boolean       @default(false)
+  cancelledBy Int?
+  createdAt   DateTime      @default(now())
+
+  @@unique([userId, classId])
+  @@index([sourceId])
+  @@index([classId])
+  @@index([status])
+  @@index([userId])
+  @@map("bookings")
+}
+
+enum ClassStatus {
+  pending
+  active
+  draft
+  cancelled
+}
+
+enum ClassType {
+  tutoring
+  course
+}
+
+model Class {
+  id           Int            @id @default(autoincrement())
+  uid          String         @unique
+  gradeId      Int?
+  grade        Grade?         @relation(fields: [gradeId], references: [id])
+  subjectId    Int?
+  subject      Subject?       @relation(fields: [subjectId], references: [id])
+  templateId   Int?
+  template     Class?         @relation("ClassTemplate", fields: [templateId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  templates    Class[]        @relation("ClassTemplate")
+  tutorId      Int?
+  tutor        User?          @relation(fields: [tutorId], references: [id])
+  notes        String?        @db.Text
+  name         String?
+  startsAt     DateTime?
+  description  String?        @db.Text
+  status       ClassStatus    @default(draft)
+  chatId       Int?           @unique
+  chat         Chat?          @relation(fields: [chatId], references: [id])
+  price        Int?           @default(1200) // 12 USD
+  earnings     Int?           @default(3000) // 30 USD
+  currency     String         @default("usd")
+  seats        Int            @default(1)
+  takenSeats   Int            @default(0)
+  isFull       Boolean        @default(false)
+  minSeats     Int            @default(1)
+  metadata     Json?
+  type         ClassType      @default(tutoring)
+  bookings     Booking[]
+  slots        Slots[]
+  schedule     Schedule[]
+  applications ApplyToTeach[]
+  sessions     Session[]
+  classId      Int?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @default(now()) @updatedAt
+
+  @@index([subjectId])
+  @@index([templateId])
+  @@index([gradeId])
+  @@index([chatId])
+  @@index([tutorId])
+  @@map("classes")
+}
+
+model Material {
+  id          Int                 @id @default(autoincrement())
+  name        String?
+  description String?             @db.Text
+  topics      Json?
+  attachments SessionAttachment[]
+  quizes      MaterialQuiz[]
+  sessions    Session[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @default(now()) @updatedAt
+
+  @@map("session_materials")
+}
+
+model Session {
+  id            Int                 @id @default(autoincrement())
+  classId       Int
+  class         Class               @relation(fields: [classId], references: [id])
+  sourceId      String              @unique @default(cuid())
+  tutorId       Int?
+  tutor         User?               @relation(fields: [tutorId], references: [id])
+  scheduleId    Int?                @unique
+  schedule      Schedule?           @relation(fields: [scheduleId], references: [id])
+  googleEventId String?             @unique
+  link          String?
+  assignments   SessionAssignment[]
+  attendance    Attendance[]
+  materialId    Int?
+  material      Material?           @relation(fields: [materialId], references: [id])
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @default(now()) @updatedAt
+
+  @@unique([classId, scheduleId])
+  @@index([classId])
+  @@index([materialId])
+  @@index([tutorId])
+  @@index([scheduleId])
+  @@map("sessions")
+}
+
+enum AttendanceStatus {
+  present
+  absent
+  late
+}
+
+model Attendance {
+  id        Int              @id @default(autoincrement())
+  sessionId Int
+  session   Session          @relation(fields: [sessionId], references: [id])
+  userId    Int
+  user      User             @relation(fields: [userId], references: [id])
+  status    AttendanceStatus @default(present)
+  createdAt DateTime         @default(now())
+
+  @@unique([sessionId, userId])
+  @@index([sessionId])
+  @@index([userId])
+  @@map("attendance")
+}
+
+model SessionAttachment {
+  id           Int        @id @default(autoincrement())
+  materialId   Int
+  material     Material   @relation(fields: [materialId], references: [id])
+  attachmentId Int
+  attachment   Attachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  @@index([materialId])
+  @@index([attachmentId])
+  @@map("session_template_attachments")
+}
+
+model Schedule {
+  id        Int      @id @default(autoincrement())
+  classId   Int
+  class     Class    @relation(fields: [classId], references: [id])
+  start     DateTime
+  end       DateTime
+  createdAt DateTime @default(now())
+  session   Session?
+  slots     Slots[]
+
+  @@index([classId])
+  @@index([classId, start, end])
+  @@map("schedule")
+}
+
+model Waitlist {
+  id        Int      @id @default(autoincrement())
+  gradeId   Int
+  grade     Grade    @relation(fields: [gradeId], references: [id])
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([gradeId, userId])
+  @@index([gradeId])
+  @@index([userId])
+  @@map("waitlist")
+}
+
+model ApplyToTeach {
+  id          Int                      @id @default(autoincrement())
+  classId     Int
+  class       Class                    @relation(fields: [classId], references: [id])
+  tutorId     Int
+  tutor       User                     @relation(fields: [tutorId], references: [id])
+  status      String                   @default("pending")
+  createdAt   DateTime                 @default(now())
+  message     String?                  @db.Text
+  attachments ApplyToTeachAttachment[]
+
+  @@unique([classId, tutorId])
+  @@index([classId])
+  @@index([tutorId])
+  @@map("apply_to_teach")
+}
+
+model ApplyToTeachAttachment {
+  id           Int          @id @default(autoincrement())
+  applyId      Int
+  apply        ApplyToTeach @relation(fields: [applyId], references: [id])
+  attachmentId Int
+  attachment   Attachment   @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  @@index([applyId])
+  @@index([attachmentId])
+  @@map("apply_to_teach_attachments")
+}
+
+model SessionAssignment {
+  id        Int          @id @default(autoincrement())
+  sessionId Int
+  session   Session      @relation(fields: [sessionId], references: [id])
+  quizId    Int
+  quiz      Quiz         @relation(fields: [quizId], references: [id])
+  open      Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  results   QuizResult[]
+
+  @@index([sessionId])
+  @@index([quizId])
+  @@map("session_assignments")
+}
+
+model QuizResult {
+  id           Int               @id @default(autoincrement())
+  userId       Int
+  user         User              @relation(fields: [userId], references: [id])
+  assignmentId Int
+  assignment   SessionAssignment @relation(fields: [assignmentId], references: [id])
+  score        Int
+  answers      Answer[]
+  createdAt    DateTime          @default(now())
+
+  @@unique([userId, assignmentId])
+  @@index([assignmentId])
+  @@map("quiz_results")
+}
+
+model Quiz {
+  id          Int                 @id @default(autoincrement())
+  name        String?
+  description String?
+  questions   Question[]
+  createdAt   DateTime            @default(now())
+  assignments SessionAssignment[]
+  materials   MaterialQuiz[]
+
+  @@map("quizzes")
+}
+
+model MaterialQuiz {
+  id         Int      @id @default(autoincrement())
+  materialId Int
+  material   Material @relation(fields: [materialId], references: [id])
+  quizId     Int
+  quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([materialId, quizId])
+  @@index([materialId])
+  @@index([quizId])
+  @@map("session_quizzes")
+}
+
+model Question {
+  id        Int            @id @default(autoincrement())
+  quizId    Int?
+  quiz      Quiz?          @relation(fields: [quizId], references: [id])
+  value     String
+  type      String         @default("multiple")
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @default(now()) @updatedAt
+  deleted   Boolean        @default(false)
+  options   AnswerOption[]
+  answers   Answer[]
+
+  @@index([quizId])
+  @@map("questions")
+}
+
+model AnswerOption {
+  id          Int      @id @default(autoincrement())
+  questionId  Int
+  question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  value       String
+  correct     Boolean  @default(false)
+  explanation String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  choices     Choice[]
+
+  @@index([questionId])
+  @@map("answers_options")
+}
+
+model Answer {
+  id         Int        @id @default(autoincrement())
+  correct    Boolean    @default(false)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @default(now()) @updatedAt
+  resultId   Int
+  result     QuizResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  questionId Int
+  question   Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  choices    Choice[]
+
+  @@index([resultId])
+  @@index([questionId])
+  @@map("answers")
+}
+
+model Choice {
+  id        Int          @id @default(autoincrement())
+  userId    Int
+  user      User         @relation(fields: [userId], references: [id])
+  answerId  Int
+  answer    Answer       @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  optionId  Int
+  option    AnswerOption @relation(fields: [optionId], references: [id])
+  correct   Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @default(now()) @updatedAt
+
+  @@unique([answerId, optionId, userId])
+  @@index([answerId])
+  @@index([optionId])
+  @@index([userId])
+  @@map("choices")
+}
+
+model VerificationToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique @db.VarChar(255)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  email     String?
+
+  @@unique([email, token])
+  @@index([token])
+  @@map("verification_tokens")
+}
+
+model Phone {
+  id        Int      @id @default(autoincrement())
+  prefix    String
+  number    String   @unique
+  userId    Int      @unique
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([userId])
+  @@map("phones")
+}
+
+model Attachment {
+  id                Int                      @id @default(autoincrement())
+  uid               String                   @unique
+  url               String
+  name              String                   @db.Text
+  filetype          String
+  size              Int
+  extension         String
+  deleted           Boolean                  @default(false)
+  ownerId           Int
+  owner             User                     @relation(fields: [ownerId], references: [id])
+  metadata          Json?
+  createdAt         DateTime                 @default(now())
+  deletedAt         DateTime?
+  messages          MessageAttachment[]
+  assignments       AssignmentAttachment[]
+  sessions          SessionAttachment[]
+  courseAttachments ApplyToTeachAttachment[]
+
+  @@index([ownerId])
+  @@map("attachments")
+}
+
+model MessageAttachment {
+  id           Int        @id @default(autoincrement())
+  messageId    Int
+  message      Message    @relation(fields: [messageId], references: [id])
+  attachment   Attachment @relation(fields: [attachmentId], references: [id])
+  attachmentId Int
+  createdAt    DateTime   @default(now())
+
+  @@index([messageId])
+  @@index([attachmentId])
+  @@map("message_attachments")
+}
+
+model Notification {
+  id         Int      @id @default(autoincrement())
+  type       String
+  title      String?
+  message    String
+  isRead     Boolean  @default(false)
+  link       String?
+  isInternal Boolean  @default(true)
+  userId     Int
+  ttl        Int      @default(5000)
+  user       User     @relation(fields: [userId], references: [id])
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model ResetEmailRequest {
+  id        Int      @id @default(autoincrement())
+  oldEmail  String
+  newEmail  String
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("reset_email_requests")
+}
+
+model ResetPasswordRequest {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  token     String   @unique
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([email])
+  @@map("reset_password_requests")
+}
+
+model Grade {
+  id          Int          @id @default(autoincrement())
+  name        String
+  special     Boolean      @default(false)
+  subjectId   Int
+  subject     Subject      @relation(fields: [subjectId], references: [id])
+  classes     Class[]
+  tutors      TutorGrade[]
+  assignments Assignment[]
+  waitlist    Waitlist[]
+
+  @@unique([name, subjectId])
+  @@index([subjectId])
+  @@fulltext([name])
+  @@map("grades")
+}
+
+model TutorGrade {
+  id        Int      @id @default(autoincrement())
+  tutorId   Int
+  tutor     User     @relation(fields: [tutorId], references: [id])
+  gradeId   Int
+  grade     Grade    @relation(fields: [gradeId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([tutorId])
+  @@index([gradeId])
+  @@map("tutor_grades")
+}
+
+model Subject {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  description String
+  icon        String?
+  order       Int          @default(0)
+  grades      Grade[]
+  classes     Class[]
+  assignments Assignment[]
+
+  @@index([id])
+  @@index([name])
+  @@fulltext([name, description])
+  @@map("subjects")
+}
+
+enum ChatType {
+  BOOKING @map("booking")
+  SUPPORT @map("support")
+}
+
+model Chat {
+  id        Int       @id @default(autoincrement())
+  type      ChatType  @default(BOOKING)
+  createdAt DateTime  @default(now())
+  messages  Message[]
+  members   Member[]
+  class     Class?
+
+  @@map("chats")
+}
+
+model Member {
+  id                Int      @id @default(autoincrement())
+  userId            Int
+  user              User     @relation(fields: [userId], references: [id])
+  chatId            Int
+  chat              Chat     @relation(fields: [chatId], references: [id])
+  lastReadMessageId Int?
+  lastReadMessage   Message? @relation(fields: [lastReadMessageId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+
+  @@unique([userId, chatId])
+  @@index([userId])
+  @@index([chatId])
+  @@index([createdAt(sort: Desc)])
+  @@index([lastReadMessageId])
+  @@map("chat_members")
+}
+
+model Message {
+  id          Int                 @id @default(autoincrement())
+  text        String              @db.Text
+  author      User                @relation(fields: [authorId], references: [id])
+  authorId    Int
+  chatId      Int
+  chat        Chat                @relation(fields: [chatId], references: [id])
+  parentId    Int?
+  parent      Message?            @relation("message_reply", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies     Message[]           @relation("message_reply")
+  createdAt   DateTime            @default(now())
+  attachments MessageAttachment[]
+  members     Member[]
+
+  @@index([chatId])
+  @@index([authorId])
+  @@index([parentId])
+  @@map("messages")
+}
+
+model Package {
+  id          Int       @id @default(autoincrement())
+  name        String
+  price       Int
+  currency    String    @default("usd")
+  description String?
+  enabled     Boolean   @default(true)
+  icon        String?
+  credits     Int
+  createdAt   DateTime  @default(now())
+  payments    Payment[]
+
+  @@unique([price, currency])
+  @@map("packages")
+}
+
+enum PaymentType {
+  PACKAGE
+  BOOKING
+}
+
+// For tracking credits purchases
+model Payment {
+  id          Int         @id @default(autoincrement())
+  sourceId    String      @unique @default(cuid())
+  type        PaymentType @default(PACKAGE)
+  packageId   Int?
+  package     Package?    @relation(fields: [packageId], references: [id])
+  custmerId   String?
+  customer    Customer?   @relation(fields: [custmerId], references: [customerId])
+  userId      Int
+  user        User        @relation(fields: [userId], references: [id])
+  amount      Int
+  stripeFee   Int
+  fee         Int         @default(0)
+  currency    String      @default("usd")
+  success     Boolean
+  refunded    Boolean     @default(false)
+  receiptUrl  String?
+  metadata    Json?
+  availableOn DateTime?
+  intentId    String?     @unique
+  createdAt   DateTime    @default(now())
+
+  @@index([userId])
+  @@index([packageId])
+  @@index([sourceId])
+  @@index([custmerId])
+  @@map("payments")
+}
+
+enum TransactionType {
+  deposit
+  payout
+  payout_reversal
+  purchase
+  refund
+  earnings
+  earnings_reversal
+  bonus
+  referral
+}
+
+enum SourceType {
+  course
+  assignment
+}
+
+model Transaction {
+  id          Int             @id @default(autoincrement())
+  amount      Int
+  fee         Int             @default(0)
+  net         Int
+  balance     Int             @default(0)
+  type        TransactionType
+  userId      Int
+  user        User            @relation(fields: [userId], references: [id])
+  createdAt   DateTime        @default(now())
+  description String?
+  metadata    Json?
+  sourceType  SourceType?
+  sourceId    String?
+  availableOn DateTime?       @default(now())
+
+  @@index([userId])
+  @@index([sourceId])
+  @@map("transactions")
+}
+
+model Bank {
+  id            Int      @id @default(autoincrement()) @db.UnsignedInt
+  profileId     Int      @db.UnsignedInt
+  userId        Int
+  currency      String   @default("usd") @db.VarChar(4)
+  country       String?  @db.VarChar(4)
+  type          String
+  abartn        String
+  accountNumber String   @unique
+  default       Boolean  @default(false)
+  user          User     @relation(fields: [userId], references: [id])
+  payouts       Payout[]
+  details       Json?
+
+  @@index([userId])
+  @@map("wise_recipients")
+}
+
+model Address {
+  id            Int     @id @default(autoincrement())
+  userId        Int     @unique
+  user          User    @relation(fields: [userId], references: [id])
+  address_lines Json?
+  city          String?
+  state         String?
+  state_code    String?
+  phone_prefix  String?
+  phone         String?
+  country       String?
+  country_code  String?
+  zipcode       String?
+  geo_location  Json?
+  name          String?
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+model Slots {
+  id         Int       @id @default(autoincrement())
+  start      DateTime
+  end        DateTime
+  tutorId    Int
+  manual     Boolean   @default(true)
+  tutor      User      @relation(fields: [tutorId], references: [id])
+  classId    Int?
+  class      Class?    @relation(fields: [classId], references: [id])
+  scheduleId Int?
+  schedule   Schedule? @relation(fields: [scheduleId], references: [id])
+
+  @@unique([tutorId, start])
+  @@unique([tutorId, start, end])
+  //For active sessions;
+  @@index([classId, tutorId])
+  // For tutor's schedule
+  @@index([id])
+  @@index([tutorId])
+  @@index([tutorId, start, classId])
+  @@index([scheduleId])
+  @@map("slots")
+}
+
+model AppConfig {
+  id               Int   @id @default(autoincrement())
+  featuredSubjects Json?
+
+  @@map("app_config")
+}
+
+model Sso {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  code      String
+  expiresAt DateTime
+
+  @@map("sso")
+}
+
+model Customer {
+  id            Int             @id @default(autoincrement())
+  customerId    String          @unique
+  userId        Int             @unique
+  user          User            @relation(fields: [userId], references: [id])
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @default(now()) @updatedAt
+  payments      Payment[]
+  subscriptions Subscription[]
+  invoices      Invoice[]
+  PaymentMethod PaymentMethod[]
+
+  @@index([userId])
+  @@index([customerId])
+  @@map("stripe_customers")
+}
+
+enum OAuthProvider {
+  GOOGLE
+}
+
+model OAuth {
+  id           Int           @id @default(autoincrement())
+  userId       Int
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String        @db.VarChar(512)
+  accessToken  String        @db.VarChar(512)
+  scope        String?       @db.Text
+  idToken      String?       @db.Text
+  tokenType    String?
+  expiresAt    DateTime?
+  provider     OAuthProvider
+  accountId    String        @unique
+
+  @@index([userId])
+  @@map("oauth")
+}
+
+model Cycle {
+  id     Int      @id @default(autoincrement())
+  start  DateTime
+  end    DateTime
+  batch  Batch?
+  Payout Payout[]
+
+  @@unique([start, end])
+  @@map("cycles")
+}
+
+enum BatchStatus {
+  NEW
+  COMPLETED
+  MARKED_FOR_CANCELLATION
+  PROCESSING_CANCEL
+  CANCELLED
+}
+
+model Batch {
+  id             Int         @id @default(autoincrement())
+  sourceId       String      @unique
+  name           String      @unique
+  sourceCurrency String
+  status         BatchStatus @default(NEW)
+  version        Int
+  paid           Boolean     @default(false)
+  cycleId        Int         @unique
+  cycle          Cycle       @relation(fields: [cycleId], references: [id])
+  payouts        Payout[]
+
+  @@index([sourceId])
+  // @@index([cycleId])
+  @@map("batches")
+}
+
+model Payout {
+  id                    Int       @id @db.UnsignedInt
+  sourceId              String    @unique @default(cuid())
+  userId                Int
+  user                  User      @relation(fields: [userId], references: [id])
+  bankId                Int?      @db.UnsignedInt
+  bank                  Bank?     @relation(fields: [bankId], references: [id])
+  sourceAccount         Int?
+  quoteUuid             String
+  status                String
+  reference             String?
+  fee                   Int?
+  serviceFee            Int       @default(0)
+  estimatedDelivery     DateTime?
+  failureReasonCode     String?
+  cycleId               Int?
+  cycle                 Cycle?    @relation(fields: [cycleId], references: [id])
+  failureDescription    String?
+  rate                  Decimal   @db.Decimal(9, 6)
+  business              Int?
+  hasActiveIssues       Boolean   @default(false)
+  sourceCurrency        String    @db.VarChar(4)
+  sourceValue           Int
+  targetCurrency        String    @db.VarChar(4)
+  targetValue           Int
+  customerTransactionId String?   @db.VarChar(64)
+  updatedAt             DateTime  @default(now()) @updatedAt
+  createdAt             DateTime  @default(now())
+  batchId               Int?
+  batch                 Batch?    @relation(fields: [batchId], references: [id])
+
+  @@index([userId])
+  @@index([sourceId])
+  @@index([batchId])
+  @@index([cycleId])
+  @@index([bankId])
+  @@map("payouts")
+}
+
+model Cron {
+  id        Int      @id @default(autoincrement())
+  name      String
+  lastRunAt DateTime
+
+  @@map("cron")
+}
+
+model StripePrice {
+  id             Int            @id @default(autoincrement())
+  priceId        String?        @unique
+  active         Boolean        @default(true)
+  billing_scheme String
+  currency       String         @default("usd")
+  lookup_key     String?
+  recurring      Json?
+  tiers_mode     String?
+  unit_amount    Int?
+  type           String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @default(now()) @updatedAt
+  productId      String?
+  product        Product?       @relation(fields: [productId], references: [productId])
+  subscriptions  Subscription[]
+  invoiceItems   InvoiceItem[]
+
+  @@index([productId])
+  @@map("stripe_prices")
+}
+
+model Product {
+  id            Int            @id @default(autoincrement())
+  productId     String?        @unique
+  active        Boolean        @default(true)
+  name          String
+  description   String?
+  image         String?
+  metadata      Json?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now()) @updatedAt
+  prices        StripePrice[]
+  subscriptions Subscription[]
+  invoiceItems  InvoiceItem[]
+
+  @@map("stripe_products")
+}
+
+model Invoice {
+  id                 Int            @id @default(autoincrement())
+  invoiceId          String?        @unique
+  subscriptionId     String?
+  subscription       Subscription?  @relation(fields: [subscriptionId], references: [subscriptionId], onDelete: Cascade, onUpdate: NoAction)
+  subtotal           Int
+  total              Int
+  currency           String
+  status             String
+  paymentIntent      String?
+  paid               Boolean
+  number             String?
+  hosted_invoice_url String?
+  invoice_pdf        String?
+  due_date           DateTime?
+  customerId         String?
+  customer           Customer?      @relation(fields: [customerId], references: [customerId])
+  createdAt          DateTime       @default(now())
+  paymentMethodId    String?
+  paymentMethod      PaymentMethod? @relation(fields: [paymentMethodId], references: [paymentMethodId])
+  collection_method  String?
+  billing_reason     String?
+  attempt_count      Int?
+  amount_paid        Int?
+  amount_due         Int?
+  items              InvoiceItem[]
+
+  @@index([customerId])
+  @@index([paymentMethodId])
+  @@index([subscriptionId])
+  @@map("stripe_invoices")
+}
+
+// Crate table to track invoice items
+model InvoiceItem {
+  id            Int          @id @default(autoincrement())
+  invoiceItemId String?      @unique
+  invoiceId     String?
+  invoice       Invoice?     @relation(fields: [invoiceId], references: [invoiceId], onDelete: Cascade)
+  amount        Int
+  currency      String
+  priceId       String?
+  price         StripePrice? @relation(fields: [priceId], references: [priceId])
+  productId     String?
+  product       Product?     @relation(fields: [productId], references: [productId])
+  description   String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @default(now()) @updatedAt
+
+  @@index([productId])
+  @@index([priceId])
+  @@index([invoiceId])
+  @@map("stripe_invoice_items")
+}
+
+model PaymentMethod {
+  id               Int       @id @default(autoincrement())
+  paymentMethodId  String?   @unique
+  customerId       String
+  customer         Customer  @relation(fields: [customerId], references: [customerId], onUpdate: NoAction)
+  type             String    @default("card")
+  card_brand       String?
+  card_country     String?
+  card_exp_month   Int?
+  card_exp_year    Int?
+  card_fingerprint String?   @unique
+  card_last4       String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
+  invoices         Invoice[]
+
+  @@index([customerId])
+  @@map("stripe_payment_methods")
+}
+
+model Subscription {
+  id                     Int          @id @default(autoincrement())
+  subscriptionId         String?      @unique
+  customerId             String
+  customer               Customer     @relation(fields: [customerId], references: [customerId])
+  productId              String?
+  product                Product?     @relation(fields: [productId], references: [productId])
+  startAt                DateTime
+  endAt                  DateTime?
+  cancelAt               DateTime?
+  default_payment_method String?
+  priceId                String?
+  scheduleId             String?
+  price                  StripePrice? @relation(fields: [priceId], references: [priceId])
+  status                 String
+  pending_update         Json?
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @default(now()) @updatedAt
+  latest_invoice         String       @unique
+  invoices               Invoice[]
+
+  @@index([priceId])
+  @@index([productId])
+  @@index([latest_invoice])
+  @@index([customerId])
+  @@map("subscriptions")
+}
+
+model Assignment {
+  id          Int                    @id @default(autoincrement())
+  uuid        String?                @unique
+  sourceId    String?                @unique @default(cuid())
+  userId      Int
+  user        User                   @relation(fields: [userId], references: [id])
+  subjectId   Int
+  subject     Subject                @relation(fields: [subjectId], references: [id])
+  gradeId     Int
+  grade       Grade                  @relation(fields: [gradeId], references: [id])
+  type        String?
+  completedAt DateTime?
+  numOfPages  Int?
+  feedback    String?                @db.Text
+  dueDate     DateTime?
+  duration    Int?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @default(now()) @updatedAt
+  attachments AssignmentAttachment[]
+  tutor       AssignmentTutor?
+
+  @@index([subjectId])
+  @@index([gradeId])
+  @@index([userId])
+  @@map("assignments")
+}
+
+model AssignmentAttachment {
+  id           Int        @id @default(autoincrement())
+  attachmentId Int
+  attachment   Attachment @relation(fields: [attachmentId], references: [id])
+  assignmentId Int
+  assignment   Assignment @relation(fields: [assignmentId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @default(now()) @updatedAt
+
+  @@index([attachmentId])
+  @@index([assignmentId])
+  @@map("assignment_attachments")
+}
+
+// model to assign assignments to tutors
+model AssignmentTutor {
+  id           Int        @id @default(autoincrement())
+  assignmentId Int        @unique
+  assignment   Assignment @relation(fields: [assignmentId], references: [id])
+  tutorId      Int
+  tutor        User       @relation(fields: [tutorId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @default(now()) @updatedAt
+
+  @@index([assignmentId])
+  @@index([tutorId])
+  @@map("assignment_tutors")
+}
